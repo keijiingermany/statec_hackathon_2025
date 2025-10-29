@@ -511,15 +511,19 @@ left, right = st.columns([1.5, 1], vertical_alignment="top")
 
 with left:
     # ✅ 左側タイトル（動的KPI）
-    st.markdown(f"<h3 style='margin-top:0; margin-bottom:0.5em;'>🗺️ {kpi_options[selected_kpi]} ({int(selected_year)})</h3>", unsafe_allow_html=True)
-    st.plotly_chart(map_fig, use_container_width=True, key="main_map")
+    st.markdown(
+        f"<h3 style='margin-top:0; margin-bottom:0.5em;'>🗺️ {kpi_options[selected_kpi]} ({int(selected_year)})</h3>",
+        unsafe_allow_html=True
+    )
 
-    # --- クラスタリングが有効な場合 ---
+    # ======================================================
+    # 🗺️ MAP SECTION
+    # ======================================================
     if enable_cluster:
+        # --- クラスタリングON ---
         clustered, cluster_profiles = run_clustering(subset, cluster_features, n_clusters=n_clusters)
-        if "cluster" in clustered.columns:
-            # 🗺️ クラスタ地図描画
-            cluster_fig = px.choropleth_mapbox(
+        if clustered is not None and "cluster" in clustered.columns:
+            map_fig = px.choropleth_mapbox(
                 clustered,
                 geojson=json.loads(geojson_str),
                 locations=clustered.index,
@@ -531,121 +535,117 @@ with left:
                 height=700,
                 color_continuous_scale="Set2"
             )
-            cluster_fig.update_layout(
+            map_fig.update_layout(
                 mapbox_center={"lat": 49.815, "lon": 6.13},
                 mapbox_zoom=8,
-                margin={"r":0,"t":0,"l":0,"b":0}
+                margin={"r": 0, "t": 0, "l": 0, "b": 0},
+                coloraxis_colorbar=dict(title="Cluster #")
             )
-            st.plotly_chart(cluster_fig, use_container_width=True, key="cluster_map")
-
-            # ======================
-            # 🧩 Cluster Overview (自動ラベル + 概要説明)
-            # ======================
-            if cluster_profiles is not None and not cluster_profiles.empty:
-
-                # --- 自動クラスタラベル生成 ---
-                def generate_cluster_label(row):
-                    """クラスタの特徴に応じた自動ラベル生成（重複回避＋強度インジケータ付き）"""
-                    mean_vals = subset[cluster_features].mean()
-
-                    score_65 = row.get("share_65p", 0) - mean_vals.get("share_65p", 0)
-                    score_foreign = row.get("share_foreign_citizenship", 0) - mean_vals.get("share_foreign_citizenship", 0)
-                    score_nonfam = row.get("share_not_in_family_nucleus", 0) - mean_vals.get("share_not_in_family_nucleus", 0)
-
-                    # メイン特徴カテゴリ
-                    if score_65 > 0.05 and score_nonfam > 0.05:
-                        base_label = "🧓 Aged & Isolated"
-                    elif score_foreign > 0.05 and score_65 < 0:
-                        base_label = "🌍 Diverse & Younger"
-                    elif score_65 < 0 and score_foreign < 0:
-                        base_label = "🏡 Local & Family-Oriented"
-                    else:
-                        base_label = "⚖️ Mixed Profile"
-
-                    # 特徴強度ラベル
-                    magnitude = abs(score_65) + abs(score_foreign) + abs(score_nonfam)
-                    if magnitude > 0.15:
-                        strength = " (Strong)"
-                    elif magnitude > 0.05:
-                        strength = " (Moderate)"
-                    else:
-                        strength = " (Mild)"
-
-                    return f"{base_label}{strength}"
-
-                cluster_profiles["Cluster Label"] = cluster_profiles.apply(generate_cluster_label, axis=1)
-
-                # --- テキスト説明生成 ---
-                cluster_profiles["Description"] = cluster_profiles.apply(
-                    lambda r: (
-                        f"Older pop: {r['share_65p']:.1f}%, "
-                        f"Foreign: {r['share_foreign_citizenship']:.1f}%, "
-                        f"Non-family: {r['share_not_in_family_nucleus']:.1f}%"
-                    ),
-                    axis=1
-                )
-
-                # ======================
-                # 🧩 Cluster Overview – Table Style (Map color consistent)
-                # ======================
-                if cluster_profiles is not None and not cluster_profiles.empty:
-                    st.markdown("### 🧩 Cluster Overview by Commune Type")
-                    st.caption("Each row summarizes one cluster. Colors correspond exactly to map legend.")
-
-                    # --- クラスタ番号順に並べ替え（地図と一致させる） ---
-                    cluster_profiles = cluster_profiles.sort_values("cluster").reset_index(drop=True)
-
-                    # --- 表形式データ作成 ---
-                    display_cols = [
-                        "cluster",
-                        "Cluster Label",
-                        "share_65p",
-                        "share_foreign_citizenship",
-                        "share_not_in_family_nucleus",
-                        "old_dep_ratio",
-                        "youth_dep_ratio",
-                    ]
-                    display_df = cluster_profiles[display_cols].copy()
-                    display_df = display_df.rename(columns={
-                        "cluster": "Cluster #",
-                        "share_65p": "65+ (%)",
-                        "share_foreign_citizenship": "Foreign (%)",
-                        "share_not_in_family_nucleus": "Non-family (%)",
-                        "old_dep_ratio": "Old Dep. Ratio",
-                        "youth_dep_ratio": "Youth Dep. Ratio"
-                    })
-
-                    # --- 色づけ（Mapのカラースケールと統一） ---
-                    color_map = px.colors.qualitative.Set2
-                    def cluster_color_html(row):
-                        color = color_map[int(row["Cluster #"]) % len(color_map)]
-                        label = row["Cluster Label"]
-                        return f"<span style='background-color:{color};padding:4px 8px;border-radius:6px;color:black;font-weight:600;'>{label}</span>"
-
-                    display_df["Profile"] = display_df.apply(cluster_color_html, axis=1)
-
-                    # --- テーブル整形表示 ---
-                    st.markdown(display_df[[
-                        "Cluster #",
-                        "Profile",
-                        "65+ (%)",
-                        "Foreign (%)",
-                        "Non-family (%)"
-                    ]].to_html(escape=False, index=False), unsafe_allow_html=True)
-
-                    # 🔹 英語の凡例説明
-                    st.markdown("""
-                    <div style='font-size:13px;color:#94a3b8;margin-top:10px;'>
-                    🧓 <b>Aged & Isolated</b>: High ageing rate and many single-person households<br>
-                    🌍 <b>Diverse & Younger</b>: Higher share of foreigners and younger population<br>
-                    🏡 <b>Local & Family-Oriented</b>: Lower ageing and foreign population – stable family areas<br>
-                    ⚖️ <b>Mixed Profile</b>: No dominant demographic pattern
-                    </div>
-                    """, unsafe_allow_html=True)
-
+            st.plotly_chart(map_fig, use_container_width=True, key="main_map")
         else:
-            # データ欠損時
-            st.warning("⚠️ Clustering failed or no valid data.")
+            st.warning("⚠️ Clustering failed or no valid data to visualize.")
+    else:
+        # --- クラスタリングOFF（通常マップ） ---
+        map_fig = make_map(subset, selected_kpi, kpi_options[selected_kpi])
+        st.plotly_chart(map_fig, use_container_width=True, key="main_map")
+
+    # ======================================================
+    # 🧩 CLUSTER OVERVIEW TABLE
+    # ======================================================
+    if enable_cluster and cluster_profiles is not None and not cluster_profiles.empty:
+        st.markdown("### 🧩 Cluster Overview by Commune Type")
+        st.caption("Each row summarizes one cluster. Colors correspond exactly to map legend.")
+
+        # --- 自動クラスタラベル生成 ---
+        def generate_cluster_label(row):
+            """クラスタの特徴に応じた自動ラベル生成（重複回避＋強度インジケータ付き）"""
+            mean_vals = subset[cluster_features].mean()
+
+            score_65 = row.get("share_65p", 0) - mean_vals.get("share_65p", 0)
+            score_foreign = row.get("share_foreign_citizenship", 0) - mean_vals.get("share_foreign_citizenship", 0)
+            score_nonfam = row.get("share_not_in_family_nucleus", 0) - mean_vals.get("share_not_in_family_nucleus", 0)
+
+            # メイン特徴カテゴリ
+            if score_65 > 0.05 and score_nonfam > 0.05:
+                base_label = "🧓 Aged & Isolated"
+            elif score_foreign > 0.05 and score_65 < 0:
+                base_label = "🌍 Diverse & Younger"
+            elif score_65 < 0 and score_foreign < 0:
+                base_label = "🏡 Local & Family-Oriented"
+            else:
+                base_label = "⚖️ Mixed Profile"
+
+            # 特徴強度ラベル
+            magnitude = abs(score_65) + abs(score_foreign) + abs(score_nonfam)
+            if magnitude > 0.15:
+                strength = " (Strong)"
+            elif magnitude > 0.05:
+                strength = " (Moderate)"
+            else:
+                strength = " (Mild)"
+
+            return f"{base_label}{strength}"
+
+        cluster_profiles["Cluster Label"] = cluster_profiles.apply(generate_cluster_label, axis=1)
+
+        # --- テキスト説明生成 ---
+        cluster_profiles["Description"] = cluster_profiles.apply(
+            lambda r: (
+                f"Older pop: {r['share_65p']:.1f}%, "
+                f"Foreign: {r['share_foreign_citizenship']:.1f}%, "
+                f"Non-family: {r['share_not_in_family_nucleus']:.1f}%"
+            ),
+            axis=1
+        )
+
+        # --- クラスタ番号順に並べ替え（地図と一致させる） ---
+        cluster_profiles = cluster_profiles.sort_values("cluster").reset_index(drop=True)
+
+        # --- 表形式データ作成（存在する列のみ選択） ---
+        base_cols = [
+            "cluster",
+            "Cluster Label",
+            "share_65p",
+            "share_foreign_citizenship",
+            "share_not_in_family_nucleus",
+            "old_dep_ratio",
+            "youth_dep_ratio",
+        ]
+        available_cols = [c for c in base_cols if c in cluster_profiles.columns]
+        display_df = cluster_profiles[available_cols].copy()
+        display_df = display_df.rename(columns={
+            "cluster": "Cluster #",
+            "share_65p": "65+ (%)",
+            "share_foreign_citizenship": "Foreign (%)",
+            "share_not_in_family_nucleus": "Non-family (%)",
+            "old_dep_ratio": "Old Dep. Ratio",
+            "youth_dep_ratio": "Youth Dep. Ratio"
+        })
+
+        # --- 色づけ（Mapのカラースケールと統一） ---
+        color_map = px.colors.qualitative.Set2
+        def cluster_color_html(row):
+            color = color_map[int(row["Cluster #"]) % len(color_map)]
+            label = row["Cluster Label"]
+            return f"<span style='background-color:{color};padding:4px 8px;border-radius:6px;color:black;font-weight:600;'>{label}</span>"
+
+        display_df["Profile"] = display_df.apply(cluster_color_html, axis=1)
+
+        # --- テーブル整形表示 ---
+        st.markdown(display_df[[
+            col for col in ["Cluster #", "Profile", "65+ (%)", "Foreign (%)", "Non-family (%)", "Old Dep. Ratio", "Youth Dep. Ratio"]
+            if col in display_df.columns
+        ]].to_html(escape=False, index=False), unsafe_allow_html=True)
+
+        # 🔹 英語の凡例説明
+        st.markdown("""
+        <div style='font-size:13px;color:#94a3b8;margin-top:10px;'>
+        🧓 <b>Aged & Isolated</b>: High ageing rate and many single-person households<br>
+        🌍 <b>Diverse & Younger</b>: Higher share of foreigners and younger population<br>
+        🏡 <b>Local & Family-Oriented</b>: Lower ageing and foreign population – stable family areas<br>
+        ⚖️ <b>Mixed Profile</b>: No dominant demographic pattern
+        </div>
+        """, unsafe_allow_html=True)
 
 with right:
     # --- Comparative Analysis ---

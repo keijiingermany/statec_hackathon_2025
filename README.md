@@ -29,7 +29,7 @@ Users can:
 
 ---
 
-## 🧠 Key Features
+## Key Features
 
 ### 🗺️ 1. Interactive Map Visualization
 - Commune-level choropleth map built with **Plotly + Mapbox**  
@@ -53,7 +53,7 @@ Users can:
 
 ---
 
-## 🧰 Tech Stack
+## Tech Stack
 
 | Category | Tools & Libraries |
 |-----------|-------------------|
@@ -66,7 +66,7 @@ Users can:
 
 ---
 
-## 🗂️ Repository Structure
+## Repository Structure
 statec_hackathon_2025/
 ├── app/
 │   ├── app.py              # Main Streamlit app
@@ -78,7 +78,7 @@ statec_hackathon_2025/
 
 ---
 
-## ⚙️ How to Run Locally
+## How to Run Locally
 
 ```bash
 # Clone the repository
@@ -96,11 +96,11 @@ pip install -r requirements.txt
 streamlit run app.py
 
 Then open your browser at:
-👉 http://localhost:8501
+	http://localhost:8501
 
 ⸻
 
-👤 Author
+Author
 
 Keiji Uehara
 	•	Data preparation, analysis, visualization, and full Streamlit app development
@@ -109,7 +109,7 @@ Keiji Uehara
 
 ⸻
 
-🧮 Methodological Notes
+Methodological Notes
 
 The analysis is based on commune-level data (2021) derived from Luxembourg’s national census.
 Indicators were standardized and combined through statistical transformations (Z-score, PCA)
@@ -128,13 +128,13 @@ Analytical Extensions (for future releases)
 
 ⸻
 
-📚 Data Source
+Data Source
 
 All datasets and indicators used in this project originate exclusively from:
 
 STATEC Open Data Portal
 National Institute of Statistics and Economic Studies of Luxembourg
-🔗 https://lustat.statec.lu/
+	https://lustat.statec.lu/
 
 No external or private data sources were used.
 All calculations, visualizations, and derived indicators are based solely on STATEC’s public datasets.
